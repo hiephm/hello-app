@@ -1,0 +1,87 @@
+steps:
+# This step runs the unit tests on the app
+- name: 'python:3.6-slim'
+  id: Test
+  entrypoint: /bin/sh
+  args:
+  - -c
+  - 'pip install flask && python test_app.py -v'
+
+# This step builds the container image.
+- name: 'gcr.io/cloud-builders/docker'
+  id: Build
+  args:
+  - 'build'
+  - '-t'
+  - 'gcr.io/$PROJECT_ID/hello-app:$SHORT_SHA'
+  - '.'
+
+# This will pushes the images to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: 
+  - 'push'
+  - 'gcr.io/$PROJECT_ID/hello-app:$SHORT_SHA'
+
+# Decrypt the file containing the key
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+  - kms
+  - decrypt
+  - --ciphertext-file=id_rsa.enc
+  - --plaintext-file=/root/.ssh/id_rsa
+  - --location=global
+  - --keyring=my-keyring
+  - --key=github-key
+  volumes:
+  - name: 'ssh'
+    path: /root/.ssh
+
+# Set up git with key and domain.
+- name: 'gcr.io/cloud-builders/git'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    chmod 600 /root/.ssh/id_rsa
+    cat <<EOF >/root/.ssh/config
+    Hostname github.com
+    IdentityFile /root/.ssh/id_rsa
+    EOF
+    mv known_hosts /root/.ssh/known_hosts
+  volumes:
+  - name: 'ssh'
+    path: /root/.ssh
+
+# Clone hello-env git repository
+- name: 'gcr.io/cloud-builders/git'
+  id: Clone hello-env git repository
+  entrypoint: /bin/sh
+  args:
+  - '-c'
+  - |
+    set -x && \
+    git clone git@github.com:hiephm/hello-env && \
+    cd hello-env && \
+    # Configure Git to create commits with Github email
+    git config user.email hiephm@gmail.com && \
+    git config user.name "Hiep Ho Minh" && \
+    git checkout candidate
+  volumes:
+  - name: 'ssh'
+    path: /root/.ssh
+
+# This step generates the new manifest and push to candidate branch on hello-env
+- name: 'gcr.io/cloud-builders/git'
+  id: Generate manifest
+  entrypoint: /bin/sh
+  args:
+  - '-c'
+  - |
+    set -x && \
+    sed "s/COMMIT_SHA/${SHORT_SHA}/g" kubernetes.yml.tpl > hello-env/kubernetes.yml && \
+    cd hello-env && \
+    git add kubernetes.yaml && \
+    git commit -m "Deploying image gcr.io/${PROJECT_ID}/hello-app:${SHORT_SHA}
+    Built from commit ${COMMIT_SHA} of repository hello-app
+    Author: $(git log --format='%an <%ae>' -n 1 HEAD)" && \
+    git push origin candidate
