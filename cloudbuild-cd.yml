@@ -80,7 +80,7 @@ steps:
     set -x && \
     sed "s/COMMIT_SHA/${SHORT_SHA}/g" kubernetes.yml.tpl > hello-env/kubernetes.yml && \
     cd hello-env && \
-    git add kubernetes.yaml && \
+    git add kubernetes.yml && \
     git commit -m "Deploying image gcr.io/${PROJECT_ID}/hello-app:${SHORT_SHA}
     Built from commit ${COMMIT_SHA} of repository hello-app
     Author: $(git log --format='%an <%ae>' -n 1 HEAD)" && \
