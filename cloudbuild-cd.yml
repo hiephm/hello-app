@@ -85,3 +85,7 @@ steps:
     Built from commit ${COMMIT_SHA} of repository hello-app
     Author: $(git log --format='%an <%ae>' -n 1 HEAD)" && \
     git push origin candidate
+  volumes:
+  - name: 'ssh'
+    path: /root/.ssh
+    
